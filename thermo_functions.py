@@ -203,6 +203,116 @@ def mixr_from_e(e,p):
     return(rv)
 
 
+## Saturation vapor pressure ######################################################
+
+# ; PURPOSE:
+# ;       compute saturation vapor pressure given temperature in K or C
+# ; INPUTS:
+# ;       T       SCALAR OR VECTOR OF TEMPERATURES IN CELSIUS OR K
+# ; OUTPUTS:
+# ;       returns the saturation vapor pressure in Pa
+# ; MODIFICATION HISTORY:
+# ;  Dominik Brunner (brunner@atmos.umnw.ethz.ch), Feb 2000
+# ;       A good reference is Gibbins, C.J., Ann. Geophys., 8, 859-886, 1990
+
+# James Ruppert (jruppert@ou.edu), converted to python and placed here, June 2022
+#   Converted all input/output to SI units, June 2022
+
+# ; Formula with T = temperature in K
+# ;    esat = exp( -6763.6/(T+T0) - 4.9283*alog((T+T0)) + 54.2190 )
+# ; Formula close to that of Magnus, 1844 with temperature TC in Celsius
+# ;    ESAT = 6.1078 * EXP( 17.2693882 * TC / (TC + 237.3) ) ; TC in Celsius
+# ; or Emanuel's formula (also approximation in form of Magnus' formula,
+# ; 1844), which was taken from Bolton, Mon. Wea. Rev. 108, 1046-1053, 1980.
+# ; This formula is very close to Goff and Gratch with differences of
+# ; less than 0.25% between -50 and 0 deg C (and only 0.4% at -60degC)    
+# ;    esat=6.112*EXP(17.67*TC/(243.5+TC))
+# 
+# ; WMO reference formula is that of Goff and Gratch (1946), slightly
+# ; modified by Goff in 1965:
+
+def esat(T):
+    
+    if np.min(T) < 105.: # degC or K?
+        T0=0.
+    else:
+        T0=273.16
+    # Put T into C
+    Tc=T-T0
+
+    # e1=101325.0
+    # TK=273.16
+    # e_s=e1*10**(10.79586*(1-TK/T)-5.02808*np.log10(T/TK)+
+    #             1.50474*(1e-4)*(1-10**(-8.29692*(T/TK-1)))+
+    #             0.42873*(1e-3)*(10**(4.76955*(1-TK/T))-1)-2.2195983)
+
+
+    # JHR (11/2022): Revised based on http://cires1.colorado.edu/~voemel/vp.html
+    # e_s=e1*10**(10.79574*(1-TK/T)
+    #              -5.02800*np.log10(T/TK)
+    #              +1.50475*(1e-4)*(1-(10**(-8.2969*(T/TK-1))))
+    #              +0.42873*(1e-3)*(10**(4.76955*(1-TK/T))-1)
+    #              +0.78614)
+
+    # Bolton 1980 (much faster)
+    # need T in Celsius
+    # e_s=611.2*np.exp(17.67*(T-TK)/(243.5+(T-TK)))
+
+    # WMO, 2008
+    # http://cires1.colorado.edu/~voemel/vp.html
+    # https://library.wmo.int/doc_num.php?explnum_id=7450
+    e_s=611.2*np.exp(17.62*Tc/(243.12+Tc))
+
+    return e_s
+
+
+## Saturation vapor pressure over ice ######################################################
+
+# ; PURPOSE:
+# ;       compute saturation vapor pressure over ice given temperature
+# ;       in K or C. The accuracy is stated by Marti & Mauersberger
+# ;       as 2% in the temperature range of 170K to 250K.
+# ; INPUTS:
+# ;       T       SCALAR OR VECTOR OF TEMPERATURES IN CELSIUS OR K
+# ; OUTPUTS:
+# ;       returns the saturation vapor pressure in Pa
+# ; MODIFICATION HISTORY:
+# ;  Dominik Brunner (brunner@atmos.umnw.ethz.ch), March 2000
+# ;       reference: Marti and Mauersberger, GRL 20, 363-366, 1993.
+
+# James Ruppert (jruppert@ou.edu), converted to python and placed here, June 2022
+#   Converted all input/output to SI units, June 2022
+
+def eice(T):
+    
+    if np.min(T) < 105.: # degC or K?
+        T0=0.
+    else:
+        T0=273.16
+    # Put T into C
+    Tc=T-T0
+    
+    # ; Define constants
+    # A=-2663.5
+    # B=12.537
+    # logp=A/T+B
+    # # return (10**logp)/100. # conversion to hPa
+    # return 10**logp
+    
+    # Guide to Meteorological Instruments and Methods of Observation (CIMO Guide)
+    # -- WMO, 2008
+    # http://cires1.colorado.edu/~voemel/vp.html
+    # https://library.wmo.int/doc_num.php?explnum_id=7450
+    # TK=273.16
+    eice=611.2*np.exp(22.46*Tc/(272.62+Tc))
+
+    # Trying Buck's formula (1996)
+    # https://www.eas.ualberta.ca/jdwilson/EAS372_13/Vomel_CIRES_satvpformulae.html
+    # http://cires1.colorado.edu/~voemel/vp.html
+    # eice=611.15*np.exp((23.036 - (T-TK)/333.7)*(T-TK)/(279.82+(T-TK)))
+    return eice
+
+
 ## Relative humidity (including for ice) ######################################################
 
 # ; PURPOSE:
@@ -236,11 +346,12 @@ def calc_relh(MIXR,p,T,ice=True):
         T0=273.16
     else:
         T0=0.
-    T+=T0
+    # Put T into K
+    Tk=T+T0
     
     es=esat(T)
     if ice:
-        es[(T < 273.16)]=eice(T[(T < 273.16)])
+        es[(Tk < 273.16)]=eice(Tk[(Tk < 273.16)])
     
     Mw=18.0160 # molecular weight of water
     Md=28.9660 # molecular weight of dry air
@@ -248,139 +359,24 @@ def calc_relh(MIXR,p,T,ice=True):
     return p/es*fact/(1+fact)*100.
 
 
-## Saturation vapor pressure ######################################################
-
-# ; PURPOSE:
-# ;       compute saturation vapor pressure given temperature in K or C
-# ; INPUTS:
-# ;       T       SCALAR OR VECTOR OF TEMPERATURES IN CELSIUS OR K
-# ; OUTPUTS:
-# ;       returns the saturation vapor pressure in Pa
-# ; MODIFICATION HISTORY:
-# ;  Dominik Brunner (brunner@atmos.umnw.ethz.ch), Feb 2000
-# ;       A good reference is Gibbins, C.J., Ann. Geophys., 8, 859-886, 1990
-
-# James Ruppert (jruppert@ou.edu), converted to python and placed here, June 2022
-#   Converted all input/output to SI units, June 2022
-
-# ; Formula with T = temperature in K
-# ;    esat = exp( -6763.6/(T+T0) - 4.9283*alog((T+T0)) + 54.2190 )
-# ; Formula close to that of Magnus, 1844 with temperature TC in Celsius
-# ;    ESAT = 6.1078 * EXP( 17.2693882 * TC / (TC + 237.3) ) ; TC in Celsius
-# ; or Emanuel's formula (also approximation in form of Magnus' formula,
-# ; 1844), which was taken from Bolton, Mon. Wea. Rev. 108, 1046-1053, 1980.
-# ; This formula is very close to Goff and Gratch with differences of
-# ; less than 0.25% between -50 and 0 deg C (and only 0.4% at -60degC)    
-# ;    esat=6.112*EXP(17.67*TC/(243.5+TC))
-# 
-# ; WMO reference formula is that of Goff and Gratch (1946), slightly
-# ; modified by Goff in 1965:
-
-def esat(T):
-    
-    if np.min(T) < 105.: # degC or K?
-        T0=273.16
-    else:
-        T0=0.
-    T+=T0
-
-    # e1=101325.0
-    TK=273.16
-    # esat=e1*10**(10.79586*(1-TK/T)-5.02808*np.log10(T/TK)+
-    #             1.50474*(1e-4)*(1-10**(-8.29692*(T/TK-1)))+
-    #             0.42873*(1e-3)*(10**(4.76955*(1-TK/T))-1)-2.2195983)
-
-
-    # JHR (11/2022): Revised based on http://cires1.colorado.edu/~voemel/vp.html
-    # esat=e1*10**(10.79574*(1-TK/T)
-    #              -5.02800*np.log10(T/TK)
-    #              +1.50475*(1e-4)*(1-(10**(-8.2969*(T/TK-1))))
-    #              +0.42873*(1e-3)*(10**(4.76955*(1-TK/T))-1)
-    #              +0.78614)
-
-    # Bolton 1980 (much faster)
-    # need T in Celsius
-    # esat=611.2*np.exp(17.67*(T-TK)/(243.5+(T-TK)))
-
-    # WMO, 2008
-    # http://cires1.colorado.edu/~voemel/vp.html
-    # https://library.wmo.int/doc_num.php?explnum_id=7450
-    esat=611.2*np.exp(17.62*(T-TK)/(243.12+(T-TK)))
-
-    return esat
-
-
-## Saturation vapor pressure over ice ######################################################
-
-# ; PURPOSE:
-# ;       compute saturation vapor pressure over ice given temperature
-# ;       in K or C. The accuracy is stated by Marti & Mauersberger
-# ;       as 2% in the temperature range of 170K to 250K.
-# ; INPUTS:
-# ;       T       SCALAR OR VECTOR OF TEMPERATURES IN CELSIUS OR K
-# ; OUTPUTS:
-# ;       returns the saturation vapor pressure in Pa
-# ; MODIFICATION HISTORY:
-# ;  Dominik Brunner (brunner@atmos.umnw.ethz.ch), March 2000
-# ;       reference: Marti and Mauersberger, GRL 20, 363-366, 1993.
-
-# James Ruppert (jruppert@ou.edu), converted to python and placed here, June 2022
-#   Converted all input/output to SI units, June 2022
-
-def eice(T):
-    
-    if np.min(T) < 105.: # degC or K?
-        T0=273.16
-    else:
-        T0=0.
-    # Put T into K
-    T+=T0
-    
-    # ; Define constants
-    # A=-2663.5
-    # B=12.537
-    # logp=A/T+B
-    # # return (10**logp)/100. # conversion to hPa
-    # return 10**logp
-    
-    # Guide to Meteorological Instruments and Methods of Observation (CIMO Guide)
-    # -- WMO, 2008
-    # http://cires1.colorado.edu/~voemel/vp.html
-    # https://library.wmo.int/doc_num.php?explnum_id=7450
-    TK=273.16
-    eice=611.2*np.exp(22.46*(T-TK)/(272.62+(T-TK)))
-
-    # Trying Buck's formula (1996)
-    # https://www.eas.ualberta.ca/jdwilson/EAS372_13/Vomel_CIRES_satvpformulae.html
-    # http://cires1.colorado.edu/~voemel/vp.html
-    # eice=611.15*np.exp((23.036 - (T-TK)/333.7)*(T-TK)/(279.82+(T-TK)))
-    return eice
-
-
 ## Saturation mixing ratio ######################################################
 
 # Just combining a couple chunks of code from other functions in this routine.
 # 
 # All input/output assumed SI units, June 2022
+#   Though T can be in C or K.
 # 
 # James Ruppert (jruppert@ou.edu)
 
 def rv_saturation(T, pres):
 
-    if np.min(T) < 105.: # degC or K?
-        T0=273.16
-    else:
-        T0=0.
-    T+=T0
-
-    TK=273.16
-
-    esat=611.2*np.exp(17.62*(T-TK)/(243.12+(T-TK))) # Pa
+    # e_s=611.2*np.exp(17.62*(T-TK)/(243.12+(T-TK))) # Pa
+    e_s=esat(T) # Pa
 
     Mw=18.0160 # molecular weight of water
     Md=28.9660 # molecular weight of dry air
 
-    rv_sat = Mw/Md * esat / (pres - esat) # kg/kg
+    rv_sat = Mw/Md * e_s / (pres - e_s) # kg/kg
 
     return rv_sat
 

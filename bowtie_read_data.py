@@ -94,9 +94,9 @@ def get_sounding_filelist(search_string):
         hh = time_str[-7:-5]
         nn = time_str[-5:-3]
         sounding_time = np.datetime64('2024-'+mm+'-'+dd+'T'+hh+':'+nn)
-        # if search_string == 'ascen':
+        if search_string == 'ascen':
             # Add 1:10 to all times
-            # sounding_time += np.timedelta64(70, 'm')
+            sounding_time += np.timedelta64(70, 'm')
         times.append(sounding_time)
 
     return snd_files, np.array(times)
@@ -137,25 +137,29 @@ def read_soundings(files):
     nz=3100
     nt = len(files)
     dims = (nt, nz)
-    p    = np.ma.zeros(dims)
-    tmpk = np.ma.zeros(dims)
-    rh   = np.ma.zeros(dims)
-    mr   = np.ma.zeros(dims)
-    # q    = np.ma.zeros(dims)
-    wdir = np.ma.zeros(dims)
-    u    = np.ma.zeros(dims)
-    v    = np.ma.zeros(dims)
-    hght_0c = np.ma.zeros(nt)
-    lat = np.ma.zeros(nt)
-    lon = np.ma.zeros(nt)
+    p    = np.full(dims, np.nan)
+    tmpk = np.full(dims, np.nan)
+    rh   = np.full(dims, np.nan)
+    mr   = np.full(dims, np.nan)
+    # q    = np.full(dims, np.nan)
+    wdir = np.full(dims, np.nan)
+    u    = np.full(dims, np.nan)
+    v    = np.full(dims, np.nan)
+    hght_0c = np.full(nt, np.nan)
+    lat = np.full(nt, np.nan)
+    lon = np.full(nt, np.nan)
 
     # Get height once
-    sndfile = xr.open_dataset(files[0])
-    hght = np.squeeze(sndfile['alt'].data) # m
-    sndfile.close()
+    for ifile in range(nt):
+        try:
+            sndfile = xr.open_dataset(files[ifile])
+            hght = np.squeeze(sndfile['alt'].data) # m
+            sndfile.close()
+            break
+        except:
+            continue
 
     for ifile in range(nt):
-
         try:
             sndfile = xr.open_dataset(files[ifile])
             p[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['p'].data))    # Pa
@@ -175,18 +179,18 @@ def read_soundings(files):
             # Will leave failed read time steps as NaN
             continue
     soundings = {
-        'lon':lon,
-        'lat':lat,
-        'hght':hght,
-        'hght_0c':hght_0c,
-        'p': p,
-        'tmpk': tmpk,
-        'rh': rh,
-        'mr': mr,
-        # 'q': q,
-        'u': u,
-        'v': v,
-        'wdir': wdir,
+        'lon':np.ma.masked_invalid(lon),
+        'lat':np.ma.masked_invalid(lat),
+        'hght':np.ma.masked_invalid(hght),
+        'hght_0c':np.ma.masked_invalid(hght_0c),
+        'p': np.ma.masked_invalid(p),
+        'tmpk': np.ma.masked_invalid(tmpk),
+        'rh': np.ma.masked_invalid(rh),
+        'mr': np.ma.masked_invalid(mr),
+        # 'q': np.ma.masked_invalid(q),
+        'u': np.ma.masked_invalid(u),
+        'v': np.ma.masked_invalid(v),
+        'wdir': np.ma.masked_invalid(wdir),
     }
     return soundings
 
