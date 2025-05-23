@@ -13,117 +13,97 @@
 # 18 Sept 2024
 
 import numpy as np
-import subprocess
 import xarray as xr
-import pandas as pd
+import subprocess
+from thermo_functions import *
+import metpy.calc as mpcalc
+from metpy.units import units
 
 
-data_main = "/ourdisk/hpc/radclouds/auto_archive_notyet/tape_2copies/macsyrett/dynamo-interp/"
+# data_main = "/ourdisk/hpc/radclouds/auto_archive_notyet/tape_2copies/macsyrett/dynamo-interp/"
+data_main = "/Users/jamesruppert/OneDrive\ -\ University\ of\ Oklahoma/code/data/dynamo/"
 
 #############################################
 ### Sounding data
 #############################################
 
-def read_dynamo_soundings(search_string = '43599'):
-
-    #### File and time list
-
-    def get_sounding_filelist(search_string):
-
-        # main = "/Volumes/wiss/M203/Radiosondes/level2/"
-        main = data_main
-
-        process = subprocess.Popen(['ls --color=none '+main + '*' +search_string+'*nc'],shell=True,
-            stdout=subprocess.PIPE,universal_newlines=True)
-        snd_files = process.stdout.readlines()
-        nsnd=len(snd_files)
-        times=[]
-        for ifile in range(nsnd):
-                snd_files[ifile] = snd_files[ifile].strip()
-                time_str = snd_files[ifile].split('/')[-1].split('.')[0]
-                if (int(time_str[-12:-10]) >= 10 or int(time_str[-12:-10]) <= 2):
-                    # print(time_str)
-                    yy = time_str[-16:-12]
-                    mm = time_str[-12:-10]
-                    dd = time_str[-10:-8]
-                    hh = time_str[-7:-5]
-                    nn = time_str[-5:-3]
-                    sounding_time = np.datetime64(yy+'-'+mm+'-'+dd+'T'+hh+':'+nn)
-                    #if search_string == 'ascen':
-                    #    # Add 1:10 to all times (assumed time to reach 100 hPa)
-                    #    sounding_time += np.timedelta64(70, 'm')
-                    times.append(sounding_time)
-
-        return snd_files, np.array(times)
-
-    #### Add dummy time steps for big jumps in time
+def read_dynamo_soundings():
 
     #### Main variable read loop
 
-    def read_soundings(files, times):
+    def read_soundings(files):
 
-        # Arrays to save variables
-        nz=3100
-        nt = len(times)
-        dims = (nt, nz)
-        p    = np.full(dims, np.nan)
-        tmpk = np.full(dims, np.nan)
-        rh   = np.full(dims, np.nan)
-        #mr   = np.full(dims, np.nan)
-        wdir = np.full(dims, np.nan)
-        u    = np.full(dims, np.nan)
-        v    = np.full(dims, np.nan)
-        hght_0c = np.full(nt, np.nan)
+        soundings = {}
 
-        # Get height
+        for ifile in range(len(files)):
 
-        sndfile = xr.open_dataset(files[0], engine='netcdf4')
-        hght = np.squeeze(sndfile['hght'].data) # m
-        sndfile.close()
+            isnd_file = snd_files[ifile].strip()
+            sndfile = xr.open_dataset(isnd_file, engine='netcdf4')
+            nz = len(np.squeeze(sndfile['level'].data))
+            times = np.squeeze(sndfile['release_time'].data) # seconds since 2011-01-01 00:00:00 UTC
+            site_name = sndfile.Site_Name
+            sndfile.close()
+            nt = len(times)
 
-        for ifile in range(nt):
+            # Read in sounding data
+            p    = np.squeeze(sndfile['p'].data)*1e2 # Pa
+            hght = np.squeeze(sndfile['alt'].data) # m
+            tmpk = np.squeeze(sndfile['T'].data)+273.15 # K
+            # Convert dew point to relative humidity
+            # def get_sh_rh(ds):
+            td    = np.squeeze(sndfile['Td'].data)+273.15 # K
+            p_mp  = p * units.pascal
+            td_mp = td * units.kelvin
+            sh    = mpcalc.specific_humidity_from_dewpoint(p_mp, td_mp, phase='liquid')
+            mr    = sh2mixr(sh.magnitude)   # kg/kg
+            rh    = calc_relh(mr,p,tmpk,ice=True) # %
+            wspd  = np.squeeze(sndfile['wind_spd'].data) # deg
+            wdir  = np.squeeze(sndfile['wind_dir'].data) # deg
+            u, v  = mpcalc.wind_components(wspd*units('m/s'), wdir*units.deg) # m/s
+            sndfile.close()
+            qcf_p = np.squeeze(sndfile['qcf_p'].data) # qc flag
+            where_bad = np.where(qcf_p != 1)
+            p[where_bad] = np.nan
+            hght[where_bad] = np.nan
+            tmpk[where_bad] = np.nan
+            rh[where_bad] = np.nan
+            mr[where_bad] = np.nan
+            u[where_bad] = np.nan
+            v[where_bad] = np.nan
+            wdir[where_bad] = np.nan
+            # Find the first level below 0C
+            hght_0c = np.full(nt, np.nan)
+            for it in range(nt):
+                if np.any(tmpk[it,:] <= 273.15):
+                    hght_0c[it] = hght[it, np.where(tmpk[it,:] <= 273.15)[0][0] ]
+                else:
+                    hght_0c[it] = np.nan
+            soundings[site_name] = {
+                'site_lon':np.ma.masked_invalid(sndfile['site_lon'].data),
+                'site_lat':np.ma.masked_invalid(sndfile['site_lat'].data),
+                'hght':np.ma.masked_invalid(hght),
+                'hght_0c':np.ma.masked_invalid(hght_0c),
+                'p': np.ma.masked_invalid(p),
+                'tmpk': np.ma.masked_invalid(tmpk),
+                'rh': np.ma.masked_invalid(rh),
+                'mr': np.ma.masked_invalid(mr),
+                'u': np.ma.masked_invalid(u.magnitude),
+                'v': np.ma.masked_invalid(v.magnitude),
+                'wdir': np.ma.masked_invalid(wdir),
+            }
 
-            try:
-                sndfile = xr.open_dataset(files[ifile])
-                p[ifile,:]    = np.squeeze(sndfile['P'].data)    # Pa
-                tmpk[ifile,:] = np.squeeze(sndfile['T'].data)   # K
-                rh[ifile,:]   = np.squeeze(sndfile['RH'].data)*1e2 # 0-1 --> %
-                #mr[ifile,:]   = np.squeeze(sndfile['mr'].data)   # kg/kg
-                wdir[ifile,:] = np.squeeze(sndfile['WDIR'].data) # deg
-                u[ifile,:]    = np.squeeze(sndfile['U'].data)    # m/s
-                v[ifile,:]    = np.squeeze(sndfile['V'].data)    # m/s
-                sndfile.close()
-                hght_0c[ifile]= hght[ np.where(tmpk[ifile,:] <= 273.15)[0][0] ]
-            except:
-                print("Failed to read ",files[ifile].split('/')[-1])
-                # Will leave failed read time steps as NaN
-                continue
-        sounding = {
-            'hght':hght,
-            'hght_0c':hght_0c,
-            'p': p,
-            'tmpk': tmpk,
-            'rh': rh,
-            #'mr': mr,
-            'u': u,
-            'v': v,
-            'wdir': wdir,
-        }
-        
-        return sounding
+        return soundings
 
     #### Call the functions
 
     # Read list of sounding files
-    snd_files, times = get_sounding_filelist(search_string=search_string)
+    process = subprocess.Popen(['ls --color=none '+data_main+'*nc'],shell=True,
+        stdout=subprocess.PIPE,universal_newlines=True)
+    snd_files = process.stdout.readlines()
 
-    # Adds NaN columns into time and sounding arrays where there are gaps > 3 h
-    # so that time-height plots properly show gaps
-
-    # Read soundings into "fixed" time array
     # Provides sounding dataset as a dictionary
-    soundings = read_soundings(snd_files, times)
+    soundings = read_soundings(snd_files)
 
-    return soundings, snd_files, times
+    return soundings
 
 #############################################

@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 import scipy.stats as stats
 from time_series_diag import *
-from bowtie_read_data import *
+from orcestra_read_data import *
 from thermo_functions import *
 import math
 

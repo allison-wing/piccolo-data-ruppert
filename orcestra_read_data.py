@@ -1,4 +1,4 @@
-# Read functions for BOWTIE various datasets.
+# Read functions for various ORCESTRA datasets.
 # 
 # Soundings - full time series 
 # 
@@ -27,7 +27,7 @@ orcestra_ipns_root = "ipns://latest.orcestra-campaign.org"
 #############################################
 
 def get_ipfs_data(path, var):
-    ds = xr.open_mfdataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
+    ds = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
     data = ds[var].data
     try:
         times = ds[var].time.data
@@ -49,23 +49,30 @@ def mask_soundings(soundings, p_threshold=100): # p_threshold should be in hPa
     # First save minimum pressure
     nt = soundings['p'].shape[0]
     min_pres = np.full(nt, np.nan)
+    soundings_masked = copy.deepcopy(soundings)
     for isnd in range(nt):
         min_pres[isnd] = np.nanmin(soundings['p'][isnd,:]*1e-2) # Pa --> hPa
+        if min_pres[isnd] > p_threshold:
+            for key in soundings.keys():
+                try:
+                    soundings_masked[key][isnd,:] = np.nan
+                except:
+                    continue
     # Mask out soundings that don't reach 100 hPa
-    min_pres_2d = np.repeat(min_pres[:,np.newaxis], soundings['p'].shape[1], axis=1)
-    idx_masked1d = (min_pres > p_threshold).nonzero()
-    idx_masked2d = (min_pres_2d > p_threshold).nonzero()
-    soundings_masked = copy.deepcopy(soundings)
-    for key in soundings_masked.keys():
-        if key == 'hght': continue
-        elif soundings_masked[key].ndim == 2:
-            # soundings[key] = np.ma.masked_where(idx_masked, soundings[key], copy=False)
-            soundings_masked[key][idx_masked2d] = np.nan
-        elif soundings_masked[key].ndim == 1:
-            # soundings[key] = np.ma.masked_where(idx_masked[:,0], soundings[key], copy=False)
-            soundings_masked[key][idx_masked1d] = np.nan
-        else:
-            raise ValueError(f"Unexpected number of dimensions for {key}")
+    # min_pres_2d = np.repeat(min_pres[:,np.newaxis], soundings['p'].shape[1], axis=1)
+    # idx_masked1d = (min_pres > p_threshold).nonzero()
+    # idx_masked2d = (min_pres_2d > p_threshold).nonzero()
+    # soundings_masked = copy.deepcopy(soundings)
+    # for key in soundings_masked.keys():
+    #     if key == 'hght': continue
+    #     elif soundings_masked[key].ndim == 2:
+    #         # soundings[key] = np.ma.masked_where(idx_masked, soundings[key], copy=False)
+    #         soundings_masked[key][idx_masked2d] = np.nan
+    #     elif soundings_masked[key].ndim == 1:
+    #         # soundings[key] = np.ma.masked_where(idx_masked[:,0], soundings[key], copy=False)
+    #         soundings_masked[key][idx_masked1d] = np.nan
+    #     else:
+    #         raise ValueError(f"Unexpected number of dimensions for {key}")
     return soundings_masked, min_pres
 
 
@@ -76,30 +83,30 @@ def mask_soundings(soundings, p_threshold=100): # p_threshold should be in hPa
 
 #### File and time list
 
-def get_sounding_filelist(search_string):
+# def get_sounding_filelist(search_string):
 
-    main = data_main+'soundings/level2/'
+#     main = data_main+'soundings/level2/'
 
-    process = subprocess.Popen(['ls --color=none '+main+'*'+search_string+'*nc'],shell=True,
-        stdout=subprocess.PIPE,universal_newlines=True)
-    snd_files = process.stdout.readlines()
-    nsnd=len(snd_files)
-    times=[]
-    for ifile in range(nsnd):
-        snd_files[ifile] = snd_files[ifile].strip()
-        time_str = snd_files[ifile].split('/')[-1].split('.')[0]
-        # print(time_str)
-        mm = time_str[-12:-10]
-        dd = time_str[-10:-8]
-        hh = time_str[-7:-5]
-        nn = time_str[-5:-3]
-        sounding_time = np.datetime64('2024-'+mm+'-'+dd+'T'+hh+':'+nn)
-        if search_string == 'ascen':
-            # Add 1:10 to all times
-            sounding_time += np.timedelta64(70, 'm')
-        times.append(sounding_time)
+#     process = subprocess.Popen(['ls --color=none '+main+'*'+search_string+'*nc'],shell=True,
+#         stdout=subprocess.PIPE,universal_newlines=True)
+#     snd_files = process.stdout.readlines()
+#     nsnd=len(snd_files)
+#     times=[]
+#     for ifile in range(nsnd):
+#         snd_files[ifile] = snd_files[ifile].strip()
+#         time_str = snd_files[ifile].split('/')[-1].split('.')[0]
+#         # print(time_str)
+#         mm = time_str[-12:-10]
+#         dd = time_str[-10:-8]
+#         hh = time_str[-7:-5]
+#         nn = time_str[-5:-3]
+#         sounding_time = np.datetime64('2024-'+mm+'-'+dd+'T'+hh+':'+nn)
+#         if search_string == 'ascen':
+#             # Add 1:10 to all times
+#             sounding_time += np.timedelta64(70, 'm')
+#         times.append(sounding_time)
 
-    return snd_files, np.array(times)
+#     return snd_files, np.array(times)
 
 #### Add dummy time steps for big jumps in time
 
@@ -131,85 +138,58 @@ def fix_time_3hrly(times_in, files_in):
 
 #### Main variable read loop
 
-def read_soundings(files):
+# def read_bowtie_soundings(search_string = 'ascen'):
+def read_soundings(platform='RV_Meteor', ascent=0):
 
-    # Arrays to save variables
-    nz=3100
-    nt = len(files)
-    dims = (nt, nz)
-    p    = np.full(dims, np.nan)
-    tmpk = np.full(dims, np.nan)
-    rh   = np.full(dims, np.nan)
-    mr   = np.full(dims, np.nan)
-    # q    = np.full(dims, np.nan)
-    wdir = np.full(dims, np.nan)
-    u    = np.full(dims, np.nan)
-    v    = np.full(dims, np.nan)
-    hght_0c = np.full(nt, np.nan)
-    lat = np.full(nt, np.nan)
-    lon = np.full(nt, np.nan)
+    path = 'Radiosondes/RAPSODI_RS_ORCESTRA_level2.zarr'
+    sndfile = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
+    # Print unique platforms
+    # print(np.unique(platform))
+    hght = np.squeeze(sndfile['alt'].data) # m
+    platform = sndfile.variables['platform'].data
+    ascent_flag = sndfile.variables['ascent_flag'].data # 0, 1 --> ascent, descent
+    isondes = (platform == 'RV_Meteor') & (ascent_flag == ascent)
+    times = sndfile['launch_time'][isondes].data
+    nt = len(times)
 
-    # Get height once
-    for ifile in range(nt):
+    p    = np.ma.masked_invalid(np.squeeze(sndfile['p'][isondes].data))    # Pa
+    tmpk = np.ma.masked_invalid(np.squeeze(sndfile['ta'][isondes].data))   # K
+    rh   = np.ma.masked_invalid(np.squeeze(sndfile['rh'][isondes].data))*1e2 # 0-1 --> %
+    mr   = np.ma.masked_invalid(np.squeeze(sndfile['mr'][isondes].data))   # kg/kg
+    # q[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['q'].data))   # kg/kg
+    wdir = np.ma.masked_invalid(np.squeeze(sndfile['wdir'][isondes].data)) # deg
+    u    = np.ma.masked_invalid(np.squeeze(sndfile['u'][isondes].data))    # m/s
+    v    = np.ma.masked_invalid(np.squeeze(sndfile['v'][isondes].data))    # m/s
+    sndfile.close()
+    hght_0c= np.full(nt, np.nan)
+    for isnd in range(nt):
         try:
-            sndfile = xr.open_dataset(files[ifile])
-            hght = np.squeeze(sndfile['alt'].data) # m
-            sndfile.close()
-            break
+            hght_0c[isnd]= hght[ np.where(tmpk[isnd,:] <= 273.15)[0][0] ]
         except:
             continue
+        hght_0c[isnd]= hght[ np.where(tmpk[isnd,:] <= 273.15)[0][0] ]
+    inan = np.where(hght_0c > 8000)[0]
+    hght_0c[inan] = np.nan
+    lat= np.ma.masked_invalid(np.squeeze(sndfile['launch_lat'][isondes].data))   # deg N
+    lon= np.ma.masked_invalid(np.squeeze(sndfile['launch_lon'][isondes].data))   # deg
 
-    for ifile in range(nt):
-        try:
-            sndfile = xr.open_dataset(files[ifile])
-            p[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['p'].data))    # Pa
-            tmpk[ifile,:] = np.ma.masked_invalid(np.squeeze(sndfile['ta'].data))   # K
-            rh[ifile,:]   = np.ma.masked_invalid(np.squeeze(sndfile['rh'].data))*1e2 # 0-1 --> %
-            mr[ifile,:]   = np.ma.masked_invalid(np.squeeze(sndfile['mr'].data))   # kg/kg
-            # q[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['q'].data))   # kg/kg
-            wdir[ifile,:] = np.ma.masked_invalid(np.squeeze(sndfile['wdir'].data)) # deg
-            u[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['u'].data))    # m/s
-            v[ifile,:]    = np.ma.masked_invalid(np.squeeze(sndfile['v'].data))    # m/s
-            sndfile.close()
-            hght_0c[ifile]= hght[ np.where(tmpk[ifile,:] <= 273.15)[0][0] ]
-            lat[ifile]= np.ma.masked_invalid(np.squeeze(sndfile['lat'].data)[1])   # deg N
-            lon[ifile]= np.ma.masked_invalid(np.squeeze(sndfile['lon'].data)[1])   # deg
-        except:
-            # print("Failed to read ",files[ifile].split('/')[-1])
-            # Will leave failed read time steps as NaN
-            continue
     soundings = {
-        'lon':np.ma.masked_invalid(lon),
-        'lat':np.ma.masked_invalid(lat),
-        'hght':np.ma.masked_invalid(hght),
+        'times': times,
+        'lon':lon,
+        'lat':lat,
+        'hght':hght,
         'hght_0c':np.ma.masked_invalid(hght_0c),
-        'p': np.ma.masked_invalid(p),
-        'tmpk': np.ma.masked_invalid(tmpk),
-        'rh': np.ma.masked_invalid(rh),
-        'mr': np.ma.masked_invalid(mr),
-        # 'q': np.ma.masked_invalid(q),
-        'u': np.ma.masked_invalid(u),
-        'v': np.ma.masked_invalid(v),
-        'wdir': np.ma.masked_invalid(wdir),
+        'p': p,
+        'tmpk': tmpk,
+        'rh': rh,
+        'mr': mr,
+        # 'q': q,
+        'u': u,
+        'v': v,
+        'wdir': wdir,
     }
+
     return soundings
-
-    #### Call the functions
-
-def read_bowtie_soundings(search_string = 'ascen'):
-
-    # Read list of sounding files
-    snd_files, times = get_sounding_filelist(search_string=search_string)
-
-    # Adds NaNs to sounding file list where there are gaps > 3 h
-    # so that time-height plots properly show gaps
-    snd_files, times = fix_time_3hrly(times, snd_files)
-
-    # Read soundings into "fixed" time array
-    # Provides sounding dataset as a dictionary
-    soundings = read_soundings(snd_files)
-
-    return soundings, snd_files, times
 
 
 
@@ -217,20 +197,23 @@ def read_bowtie_soundings(search_string = 'ascen'):
 ### HALO dropsonde soundings
 #############################################
 
-def read_halo_soundings():
+def read_halo_soundings_lev3():
     path = "HALO/dropsondes/Level_3/PERCUSION_Level_3.zarr"
-    ds = xr.open_mfdataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
+    ds = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
     time = ds["sonde_time"].data # m
     qual_flag = ds["sonde_qc"].data # 0, 1, 2 --> good, bad, ugly
     # snd_halo["qual_flag"] = qual_flag
     # Put variables into dictionary
     snd_halo = {}
+    snd_halo["times"] = time
     snd_halo["hght"] = np.ma.masked_invalid(ds["altitude"].data) # m
-    snd_halo["iwv"]  = np.ma.masked_invalid(ds["iwv"].data) # kg/m^2
-    snd_halo["lat"]  = np.ma.masked_invalid(ds["lat"].data) # deg
-    snd_halo["lon"]  = np.ma.masked_invalid(ds["lon"].data) # deg
+    # snd_halo["iwv"]  = np.ma.masked_invalid(ds["iwv"].data) # kg/m^2
+    # snd_halo["lat"]  = np.ma.masked_invalid(ds["aircraft_latitude"].data) # deg
+    # snd_halo["lon"]  = np.ma.masked_invalid(ds["aircraft_longitude"].data) # deg
+    snd_halo["lat"]  = np.ma.masked_invalid(ds["aircraft_latitude"].data) # deg
+    snd_halo["lon"]  = np.ma.masked_invalid(ds["aircraft_longitude"].data) # deg
     snd_halo["p"]    = np.ma.masked_invalid(ds["p"].data) # Pa
-    sh = np.ma.masked_invalid(ds["q"].data) # specific humidity, kg/kg
+    sh               = np.ma.masked_invalid(ds["q"].data) # specific humidity, kg/kg
     # Convert SH to MR for consistency with METEOR soundings
     # mr = sh / (1 - sh)
     snd_halo["mr"] = sh / (1 - sh) # mixing ratio, kg/kg
@@ -252,7 +235,53 @@ def read_halo_soundings():
             snd_halo[key] = snd_halo[key][indices1d]
         else:
             raise ValueError(f"Unexpected number of dimensions for {key}: shape is {snd_halo[key].shape}")
-    return snd_halo, time
+    return snd_halo
+
+def read_halo_soundings_lev4():
+    path = "HALO/dropsondes/Level_4/PERCUSION_Level_4.zarr"
+    ds = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
+    time = ds["circle_time"].data # m
+    qual_flag = ds["sonde_qc"].data # 0, 1, 2 --> good, bad, ugly
+    # snd_halo["qual_flag"] = qual_flag
+    # Put variables into dictionary
+    snd_halo = {}
+    snd_halo["times"] = time
+    snd_halo['sondes_per_circle'] = np.ma.masked_invalid(ds["sondes_per_circle"].data) # n
+    snd_halo['circle_id'] = ds["circle_id"].data # #
+    snd_halo["lat"]  = np.ma.masked_invalid(ds["circle_lat"].data) # deg
+    snd_halo["lon"]  = np.ma.masked_invalid(ds["circle_lon"].data) # deg
+    snd_halo['circle_altitude'] = np.ma.masked_invalid(ds["circle_altitude"].data) # m
+    snd_halo['circle_radius'] = np.ma.masked_invalid(ds["circle_radius"].data) # #
+    snd_halo['div'] = np.ma.masked_invalid(ds["div"].data) # /s
+    snd_halo['omega'] = np.ma.masked_invalid(ds["omega"].data) # hPa/hr
+    snd_halo['w'] = np.ma.masked_invalid(ds["wvel"].data) # m/s
+    snd_halo['vor'] = np.ma.masked_invalid(ds["vor"].data) # /s
+    snd_halo["hght"] = np.ma.masked_invalid(ds["altitude"].data) # m
+    # snd_halo["iwv"]  = np.ma.masked_invalid(ds["iwv"].data) # kg/m^2
+    snd_halo["p"]    = np.ma.masked_invalid(ds["p_mean"].data) # Pa
+    sh = np.ma.masked_invalid(ds["q_mean"].data) # specific humidity, kg/kg
+    # Convert SH to MR for consistency with METEOR soundings
+    # mr = sh / (1 - sh)
+    snd_halo["mr"] = sh / (1 - sh) # mixing ratio, kg/kg
+    snd_halo["tmpk"] = np.ma.masked_invalid(ds["ta_mean"].data) # K
+    snd_halo["u"]    = np.ma.masked_invalid(ds["u_mean"].data) # m/s
+    snd_halo["v"]    = np.ma.masked_invalid(ds["v_mean"].data) # m/s
+    ds.close()
+    # Drop values depending on quality flag
+    # flag_value = 0
+    # indices1d = (qual_flag == flag_value).nonzero()
+    # indices1d_not = (qual_flag != flag_value).nonzero()
+    # time = np.array(time)[indices1d]
+    # for key in snd_halo.keys():
+    #     if key == "hght":
+    #         continue
+    #     if snd_halo[key].ndim == 2:
+    #         snd_halo[key] = np.delete(snd_halo[key], indices1d_not, axis=0)
+    #     elif (snd_halo[key].ndim == 1) and (snd_halo[key].shape[0] == qual_flag.shape[0]):
+    #         snd_halo[key] = snd_halo[key][indices1d]
+    #     else:
+    #         raise ValueError(f"Unexpected number of dimensions for {key}: shape is {snd_halo[key].shape}")
+    return snd_halo
 
 
 
@@ -260,43 +289,43 @@ def read_halo_soundings():
 ### BCO soundings
 #############################################
 
-def read_bco_soundings(descent = False):
-    path = "BCO/RS_BCO_level2.zarr"
-    ds = xr.open_mfdataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
-    # time = ds['flight_time']
-    time = ds['launch_time']
-    ascent_flag = ds["ascent_flag"].data # 0, 1 --> ascent, descent
-    # Put variables into dictionary
-    snd_bco = {}
-    snd_bco["hght"] = np.ma.masked_invalid(ds["alt"].data) # m
-    # snd_bco["iwv"]  = np.ma.array(ds["iwv"].data) # kg/m^2
-    snd_bco["lat"]  = np.ma.masked_invalid(ds["lat"].data) # deg
-    snd_bco["lon"]  = np.ma.masked_invalid(ds["lon"].data) # deg
-    snd_bco["p"]    = np.ma.masked_invalid(ds["p"].data) # Pa
-    # snd_bco["q"]    = np.ma.masked_invalid(ds["q"].data) # specific humidity, kg/kg
-    snd_bco["mr"]   = np.ma.masked_invalid(ds["mr"].data) # mixing ratio, kg/kg
-    snd_bco["tmpk"] = np.ma.masked_invalid(ds["ta"].data) # K
-    snd_bco["u"]    = np.ma.masked_invalid(ds["u"].data) # m/s
-    snd_bco["v"]    = np.ma.masked_invalid(ds["v"].data) # m/s
-    ds.close()
-    # Drop values depending on ascent/descent flag
-    if descent:
-        flag_value = 1 # decending
-    else:
-        flag_value = 0 # ascending
-    indices1d = (ascent_flag == flag_value).nonzero()
-    indices1d_not = (ascent_flag != flag_value).nonzero()
-    time = np.array(time)[indices1d]
-    for key in snd_bco.keys():
-        if key == "hght":
-            continue
-        if snd_bco[key].ndim == 2:
-            snd_bco[key] = np.delete(snd_bco[key], indices1d_not, axis=0)
-        elif (snd_bco[key].ndim == 1) and (snd_bco[key].shape[0] == time.shape[0]):
-            snd_bco[key] = snd_bco[key][indices1d]
-        else:
-            raise ValueError(f"Unexpected number of dimensions for {key}")
-    return snd_bco, time
+# def read_bco_soundings(descent = False):
+#     path = "BCO/RS_BCO_level2.zarr"
+#     ds = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
+#     # time = ds['flight_time']
+#     time = ds['launch_time']
+#     ascent_flag = ds["ascent_flag"].data # 0, 1 --> ascent, descent
+#     # Put variables into dictionary
+#     snd_bco = {}
+#     snd_bco["hght"] = np.ma.masked_invalid(ds["alt"].data) # m
+#     # snd_bco["iwv"]  = np.ma.array(ds["iwv"].data) # kg/m^2
+#     snd_bco["lat"]  = np.ma.masked_invalid(ds["lat"].data) # deg
+#     snd_bco["lon"]  = np.ma.masked_invalid(ds["lon"].data) # deg
+#     snd_bco["p"]    = np.ma.masked_invalid(ds["p"].data) # Pa
+#     # snd_bco["q"]    = np.ma.masked_invalid(ds["q"].data) # specific humidity, kg/kg
+#     snd_bco["mr"]   = np.ma.masked_invalid(ds["mr"].data) # mixing ratio, kg/kg
+#     snd_bco["tmpk"] = np.ma.masked_invalid(ds["ta"].data) # K
+#     snd_bco["u"]    = np.ma.masked_invalid(ds["u"].data) # m/s
+#     snd_bco["v"]    = np.ma.masked_invalid(ds["v"].data) # m/s
+#     ds.close()
+#     # Drop values depending on ascent/descent flag
+#     if descent:
+#         flag_value = 1 # decending
+#     else:
+#         flag_value = 0 # ascending
+#     indices1d = (ascent_flag == flag_value).nonzero()
+#     indices1d_not = (ascent_flag != flag_value).nonzero()
+#     time = np.array(time)[indices1d]
+#     for key in snd_bco.keys():
+#         if key == "hght":
+#             continue
+#         if snd_bco[key].ndim == 2:
+#             snd_bco[key] = np.delete(snd_bco[key], indices1d_not, axis=0)
+#         elif (snd_bco[key].ndim == 1) and (snd_bco[key].shape[0] == time.shape[0]):
+#             snd_bco[key] = snd_bco[key][indices1d]
+#         else:
+#             raise ValueError(f"Unexpected number of dimensions for {key}")
+#     return snd_bco, time
 
 
 
