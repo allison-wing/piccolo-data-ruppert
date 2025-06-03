@@ -22,12 +22,15 @@ def vert_integral_hydro(data):
     var_int[nans] = np.nan
     return var_int
 
-def vert_integral(data, set_nans=True):
+def vert_integral(data, zbase=0, set_nans=True):
     p = np.ma.filled(data['p'], np.nan)
     t = np.ma.filled(data['tmpk'], np.nan)
     hght = data['hght']
     if hght.ndim == 1:
+        iz = np.where(hght >= zbase)[0]
         hght = np.repeat(hght[np.newaxis,:], p.shape[0], axis=0)
+    else:
+        iz = np.where(hght[0,:] >= zbase)[0]
     try:
         sh = data['sh']
         mr = sh2mixr(sh)
@@ -39,8 +42,8 @@ def vert_integral(data, set_nans=True):
     rv=461.5
     eps_r=rv/rd
     rho = p / ( rd * t * (1. + mr*eps_r)/(1.+mr) )
-    # cwv = np.trapezoid(sh * rho, hght, axis=1)
-    cwv = np.nansum((rho * sh * np.gradient(hght, axis=1)), axis=1)
+    cwv = np.trapezoid(sh[:,iz] * rho[:,iz], hght[:,iz], axis=1)
+    # cwv = np.nansum((rho[:,iz] * sh[:,iz] * np.gradient(hght[:,iz], axis=1)), axis=1)
     # Replace NaNs
     if set_nans:
         nans = np.where(np.isnan(p[:,5]))
