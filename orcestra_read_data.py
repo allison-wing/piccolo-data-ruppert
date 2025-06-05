@@ -367,52 +367,54 @@ def read_bowtie_radiometer():
 ### Sun photometer data
 #############################################
 
+# Same data is now on IPFS, so take from there
+
 # Downloading this data from https://aeronet.gsfc.nasa.gov/new_web/cruises_v3/Meteor_24_0.html
 
-def read_bowtie_sunphotometer():
+# def read_bowtie_sunphotometer():
 
-    # main_photometer = "/Volumes/wiss/M203/microtops/downloaded/Meteor_24_0/AOD/Meteor_24_0_all_points.lev15"
-    # main = data_main+"microtops/Meteor_24_0_old/AOD/Meteor_24_0_all_points.lev15"
-    main = data_main+"microtops/Meteor_24_0/AOD/Meteor_24_0_all_points.lev20"
+#     # main_photometer = "/Volumes/wiss/M203/microtops/downloaded/Meteor_24_0/AOD/Meteor_24_0_all_points.lev15"
+#     # main = data_main+"microtops/Meteor_24_0_old/AOD/Meteor_24_0_all_points.lev15"
+#     main = data_main+"microtops/Meteor_24_0/AOD/Meteor_24_0_all_points.lev20"
 
-    photom = pd.read_csv(main, sep=',', on_bad_lines='skip', skiprows=4)
+#     photom = pd.read_csv(main, sep=',', on_bad_lines='skip', skiprows=4)
 
-    # Get Datetimes from time stamps
-    df_datetime = pd.DataFrame({'year': photom['Date(dd:mm:yyyy)'].str[-4:],
-                                'month': photom['Date(dd:mm:yyyy)'].str[3:5],
-                                'day': photom['Date(dd:mm:yyyy)'].str[0:2],
-                                'hour': photom['Time(hh:mm:ss)'].str[0:2],
-                                'minute': photom['Time(hh:mm:ss)'].str[3:5],
-                                'second': photom['Time(hh:mm:ss)'].str[6:8]})
+#     # Get Datetimes from time stamps
+#     df_datetime = pd.DataFrame({'year': photom['Date(dd:mm:yyyy)'].str[-4:],
+#                                 'month': photom['Date(dd:mm:yyyy)'].str[3:5],
+#                                 'day': photom['Date(dd:mm:yyyy)'].str[0:2],
+#                                 'hour': photom['Time(hh:mm:ss)'].str[0:2],
+#                                 'minute': photom['Time(hh:mm:ss)'].str[3:5],
+#                                 'second': photom['Time(hh:mm:ss)'].str[6:8]})
 
-    photom['Date(dd:mm:yyyy)'] = pd.to_datetime(df_datetime)
+#     photom['Date(dd:mm:yyyy)'] = pd.to_datetime(df_datetime)
 
-    # Sort dataframe
-    photom = photom.sort_values('Date(dd:mm:yyyy)')
+#     # Sort dataframe
+#     photom = photom.sort_values('Date(dd:mm:yyyy)')
 
-    # Convert IWV column to float
-    photom['Water Vapor(cm)'] = pd.to_numeric(photom['Water Vapor(cm)'], errors='coerce')*10 # cm --> mm
+#     # Convert IWV column to float
+#     photom['Water Vapor(cm)'] = pd.to_numeric(photom['Water Vapor(cm)'], errors='coerce')*10 # cm --> mm
 
-    # photom = pd.read_csv(main_photometer, sep=',', on_bad_lines='skip', skiprows=2)
+#     # photom = pd.read_csv(main_photometer, sep=',', on_bad_lines='skip', skiprows=2)
 
-    # # Get Datetimes from time stamps
-    # df_datetime = pd.DataFrame({'year': photom['DATE'].str[-4:],
-    #                             'month': photom['DATE'].str[0:2],
-    #                             'day': photom['DATE'].str[3:5],
-    #                             'hour': photom['TIME'].str[0:2],
-    #                             'minute': photom['TIME'].str[3:5],
-    #                             'second': photom['TIME'].str[6:8]})
-    # photom['DATE'] = pd.to_datetime(df_datetime)
-    # # for icol in range(32):
-    # #     print(photom.iloc[0:3, icol])
+#     # # Get Datetimes from time stamps
+#     # df_datetime = pd.DataFrame({'year': photom['DATE'].str[-4:],
+#     #                             'month': photom['DATE'].str[0:2],
+#     #                             'day': photom['DATE'].str[3:5],
+#     #                             'hour': photom['TIME'].str[0:2],
+#     #                             'minute': photom['TIME'].str[3:5],
+#     #                             'second': photom['TIME'].str[6:8]})
+#     # photom['DATE'] = pd.to_datetime(df_datetime)
+#     # # for icol in range(32):
+#     # #     print(photom.iloc[0:3, icol])
 
-    # # Sort dataframe
-    # photom = photom.sort_values('DATE')
+#     # # Sort dataframe
+#     # photom = photom.sort_values('DATE')
 
-    # # Convert IWV column to float
-    # photom['WATER'] = pd.to_numeric(photom['WATER'], errors='coerce')*10 # cm --> mm
+#     # # Convert IWV column to float
+#     # photom['WATER'] = pd.to_numeric(photom['WATER'], errors='coerce')*10 # cm --> mm
 
-    return photom
+#     return photom
 
 
 

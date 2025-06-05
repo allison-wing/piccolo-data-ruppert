@@ -33,7 +33,7 @@ def vert_integral(data, zbase=0, set_nans=True):
         iz = np.where(hght[0,:] >= zbase)[0]
     try:
         sh = data['sh']
-        mr = sh2mixr(sh)
+        # mr = sh2mixr(sh)
     except:
         mr = data['mr']
         sh = mixr2sh(mr)
@@ -41,7 +41,10 @@ def vert_integral(data, zbase=0, set_nans=True):
     rd=287.04
     rv=461.5
     eps_r=rv/rd
-    rho = p / ( rd * t * (1. + mr*eps_r)/(1.+mr) )
+    # The two forms of rho below are identical, just using r vs q
+    # rho = p / ( rd * t * (1. + mr*eps_r)/(1.+mr) )
+    # Below is the form of Schulz and Stevens (2018)
+    rho = p / ( rd * t * (1 + sh*(eps_r - 1)) )
     cwv = np.trapezoid(sh[:,iz] * rho[:,iz], hght[:,iz], axis=1)
     # cwv = np.nansum((rho[:,iz] * sh[:,iz] * np.gradient(hght[:,iz], axis=1)), axis=1)
     # Replace NaNs
