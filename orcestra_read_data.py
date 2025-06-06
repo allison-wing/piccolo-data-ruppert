@@ -1,14 +1,5 @@
 # Read functions for various ORCESTRA datasets.
 # 
-# Soundings - full time series 
-# 
-# DSHIP ship data
-# 
-# Radiometer
-# 
-# Sun photometer
-# 
-# 
 # James Ruppert
 # 18 Sept 2024
 
@@ -20,7 +11,6 @@ import pandas as pd
 # data_main = "/ourdisk/hpc/radclouds/auto_archive_notyet/tape_2copies/piccolo-data/data/"
 data_main = "./data/"
 orcestra_ipns_root = "ipns://latest.orcestra-campaign.org"
-
 
 #############################################
 ### General read function for IPNS
@@ -333,33 +323,36 @@ def read_halo_soundings_lev4():
 ### Radiometer data
 #############################################
 
-def read_bowtie_radiometer():
+# Now downloading this data from IPFS
 
-    # main = "/Volumes/wiss/M203/Radiometer_MWR-HatPro-Uni-Leipzig/Data/"
-    main = data_main+'radiometer/'
+# def read_bowtie_radiometer():
 
-    process = subprocess.Popen(['ls --color=none '+main+'*/*singl*nc'],shell=True,
-        stdout=subprocess.PIPE,universal_newlines=True)
-    rdm_files = process.stdout.readlines()
-    nfiles=len(rdm_files)
-    for ifile in range(nfiles):
-        rdm_files[ifile] = rdm_files[ifile].strip()
-        rdmfile = xr.open_dataset(rdm_files[ifile])
-        rdm_time = rdmfile['time'].data
-        cwv = rdmfile['iwv'].data
-        flag = rdmfile['iwv_quality_flag'].data
-        rdmfile.close()
-        rdm_time = np.array(rdm_time, dtype='datetime64[s]')
-        cwv = np.array(cwv)
-        cwv[np.where(flag != 0)] = np.nan
-        if ifile == 0:
-            times=rdm_time
-            cwv_rdm=cwv
-        else:
-            times=np.concatenate((times,rdm_time))
-            cwv_rdm=np.concatenate((cwv_rdm,cwv))
+#     # main = "/Volumes/wiss/M203/Radiometer_MWR-HatPro-Uni-Leipzig/Data/"
+#     main = data_main+'radiometer/'
 
-    return cwv_rdm, times
+#     # process = subprocess.Popen(['ls --color=none '+main+'*/*singl*nc'],shell=True,
+#     process = subprocess.Popen(['ls --color=none '+main+'*singl*nc'],shell=True,
+#         stdout=subprocess.PIPE,universal_newlines=True)
+#     rdm_files = process.stdout.readlines()
+#     nfiles=len(rdm_files)
+#     for ifile in range(nfiles):
+#         rdm_files[ifile] = rdm_files[ifile].strip()
+#         rdmfile = xr.open_dataset(rdm_files[ifile])
+#         rdm_time = rdmfile['time'].data
+#         cwv = rdmfile['iwv'].data
+#         flag = rdmfile['iwv_quality_flag'].data
+#         rdmfile.close()
+#         rdm_time = np.array(rdm_time, dtype='datetime64[s]')
+#         cwv = np.array(cwv)
+#         cwv[np.where(flag != 0)] = np.nan
+#         if ifile == 0:
+#             times=rdm_time
+#             cwv_rdm=cwv
+#         else:
+#             times=np.concatenate((times,rdm_time))
+#             cwv_rdm=np.concatenate((cwv_rdm,cwv))
+
+#     return cwv_rdm, times
 
 
 
