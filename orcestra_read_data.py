@@ -190,7 +190,7 @@ def read_soundings(platform='RV_Meteor', ascent=0):
 def read_halo_soundings_lev3():
     path = "HALO/dropsondes/Level_3/PERCUSION_Level_3.zarr"
     ds = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
-    time = ds["sonde_time"].data # m
+    time = ds["launch_time"].data
     qual_flag = ds["sonde_qc"].data # 0, 1, 2 --> good, bad, ugly
     # snd_halo["qual_flag"] = qual_flag
     # Put variables into dictionary
