@@ -131,11 +131,12 @@ def fix_time_3hrly(times_in, files_in):
 # def read_bowtie_soundings(search_string = 'ascen'):
 def read_soundings(platform='RV_Meteor', ascent=0):
 
-    path = 'Radiosondes/RAPSODI_RS_ORCESTRA_level2.zarr'
+    path = 'Radiosondes/Level_2/RAPSODI_RS_ORCESTRA_level2.zarr'
     sndfile = xr.open_dataset(f"{orcestra_ipns_root}/products/{path}", engine="zarr")
     # Print unique platforms
     # print(np.unique(platform))
-    hght = np.squeeze(sndfile['alt'].data) # m
+    # hght = np.squeeze(sndfile['alt'].data) # m
+    hght = np.squeeze(sndfile['height'].data) # m
     platform = sndfile.variables['platform'].data
     ascent_flag = sndfile.variables['ascent_flag'].data # 0, 1 --> ascent, descent
     isondes = (platform == 'RV_Meteor') & (ascent_flag == ascent)
@@ -200,8 +201,8 @@ def read_halo_soundings_lev3():
     # snd_halo["iwv"]  = np.ma.masked_invalid(ds["iwv"].data) # kg/m^2
     # snd_halo["lat"]  = np.ma.masked_invalid(ds["aircraft_latitude"].data) # deg
     # snd_halo["lon"]  = np.ma.masked_invalid(ds["aircraft_longitude"].data) # deg
-    snd_halo["lat"]  = np.ma.masked_invalid(ds["aircraft_latitude"].data) # deg
-    snd_halo["lon"]  = np.ma.masked_invalid(ds["aircraft_longitude"].data) # deg
+    snd_halo["lat"]  = np.ma.masked_invalid(ds["launch_lat"].data) # deg
+    snd_halo["lon"]  = np.ma.masked_invalid(ds["launch_lon"].data) # deg
     snd_halo["p"]    = np.ma.masked_invalid(ds["p"].data) # Pa
     sh               = np.ma.masked_invalid(ds["q"].data) # specific humidity, kg/kg
     # Convert SH to MR for consistency with METEOR soundings
